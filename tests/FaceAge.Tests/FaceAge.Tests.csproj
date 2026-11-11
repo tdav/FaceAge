@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="xunit.v3" Version="4.0.2" />
+    <!-- ONNX Runtime для Windows/Linux: тот же управляемый API, что и на Android. -->
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.31.1" />
+    <!-- RectF и SizeF, которыми AgeEstimator отдаёт результат. -->
+    <PackageReference Include="Microsoft.Maui.Graphics" Version="11.0.0" />
+    <!-- Декодер JPEG тестовых фото. -->
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" />
+    <Using Include="Xunit" />
+    <Using Include="Microsoft.Maui.Graphics" />
+  </ItemGroup>
+
+  <!-- Проверяется ровно код приложения: файл подключён ссылкой, не копией. -->
+  <ItemGroup>
+    <Compile Include="..\..\src\FaceAge\Vision\AgeEstimator.cs" Link="Linked\AgeEstimator.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\src\FaceAge\Resources\Raw\*.onnx" Link="Models\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="Photos\*.jpg" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+</Project>

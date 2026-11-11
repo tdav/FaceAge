@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="FaceAge.MainPage"
+             BackgroundColor="Black"
+             SafeAreaEdges="None">
+
+    <!-- Камера и рамка — от края до края, под системными панелями; панель управления — внутри безопасной зоны. -->
+    <Grid x:Name="Root" SafeAreaEdges="None">
+        <!-- Превью камеры вставляется сюда первым элементом, когда выдано разрешение (MainPage.StartCameraAsync). -->
+        <GraphicsView x:Name="Overlay" InputTransparent="True" />
+
+        <Grid SafeAreaEdges="Container" RowDefinitions="Auto,*,Auto" Padding="16,8,16,16">
+            <Border Style="{StaticResource Chip}" HorizontalOptions="Center">
+                <Label x:Name="StatusLabel" Style="{StaticResource Footnote}" TextColor="{DynamicResource Label}" Text="Загрузка модели…" />
+            </Border>
+
+            <Border Grid.Row="2" Style="{StaticResource Card}">
+                <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="16">
+                    <Label Text="Возраст" Style="{StaticResource Subheadline}" />
+                    <HorizontalStackLayout Grid.Row="1" Spacing="8">
+                        <Label x:Name="AgeLabel" StyleId="Tabular" Style="{StaticResource Hero}" Text="—"
+                               SemanticProperties.Description="Возраст пока не определён" />
+                        <Label x:Name="AgeUnitLabel" Style="{StaticResource HeroUnit}" VerticalOptions="End" Margin="0,0,0,14" />
+                    </HorizontalStackLayout>
+                    <Label Grid.Row="2" Style="{StaticResource Footnote}" Text="Оценка по лицу, обычно ±5 лет" />
+
+                    <Button x:Name="ActionButton" Grid.Column="1" Grid.RowSpan="3" VerticalOptions="End"
+                            Style="{StaticResource FilledButton}" Text="Пауза" IsEnabled="False"
+                            Clicked="OnActionClicked" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</ContentPage>

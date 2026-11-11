@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Application xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="FaceAge.App">
+    <Application.Resources>
+        <ResourceDictionary>
+            <!--
+                Токены «Chrono Business - Apple Design»: светлый вид до первого ApplyTheme.
+                Тёмный вид и системный акцент Material You раскладывает App.ApplyTheme.
+            -->
+            <Color x:Key="Label">#FF000000</Color>
+            <Color x:Key="SecondaryLabel">#993C3C43</Color>
+            <Color x:Key="TertiaryLabel">#4C3C3C43</Color>
+            <Color x:Key="Tint">#FFFF8D28</Color>
+            <Color x:Key="OnTint">#FF000000</Color>
+            <Color x:Key="GlassOpaque">#FFF9F9F9</Color>
+            <Color x:Key="GlassEdge">#0F000000</Color>
+            <Color x:Key="QuaternarySystemFill">#14747480</Color>
+
+            <!-- Текст: Inter вместо SF Pro, размеры — шкала Apple (Large). -->
+            <Style TargetType="Label">
+                <Setter Property="FontFamily" Value="InterRegular" />
+                <Setter Property="FontSize" Value="17" />
+                <Setter Property="TextColor" Value="{DynamicResource Label}" />
+            </Style>
+            <Style x:Key="Subheadline" TargetType="Label">
+                <Setter Property="FontFamily" Value="InterSemiBold" />
+                <Setter Property="FontSize" Value="15" />
+                <Setter Property="TextColor" Value="{DynamicResource SecondaryLabel}" />
+            </Style>
+            <Style x:Key="Footnote" TargetType="Label">
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="TextColor" Value="{DynamicResource SecondaryLabel}" />
+            </Style>
+            <!-- time-hero: крупная светлая цифра, табличные цифры включает маппер по StyleId="Tabular". -->
+            <Style x:Key="Hero" TargetType="Label">
+                <Setter Property="FontFamily" Value="InterLight" />
+                <Setter Property="FontSize" Value="88" />
+                <Setter Property="LineHeight" Value="1.0" />
+                <Setter Property="TextColor" Value="{DynamicResource Label}" />
+            </Style>
+            <Style x:Key="HeroUnit" TargetType="Label">
+                <Setter Property="FontSize" Value="22" />
+                <Setter Property="TextColor" Value="{DynamicResource SecondaryLabel}" />
+            </Style>
+
+            <!-- Filled (prominent): заливка tint, текст on-tint, капсула size-button-l 50. -->
+            <Style x:Key="FilledButton" TargetType="Button">
+                <Setter Property="FontFamily" Value="InterSemiBold" />
+                <Setter Property="FontSize" Value="17" />
+                <Setter Property="HeightRequest" Value="50" />
+                <Setter Property="MinimumWidthRequest" Value="112" />
+                <Setter Property="CornerRadius" Value="25" />
+                <Setter Property="Padding" Value="24,0" />
+                <Setter Property="BorderWidth" Value="0" />
+                <Setter Property="BackgroundColor" Value="{DynamicResource Tint}" />
+                <Setter Property="TextColor" Value="{DynamicResource OnTint}" />
+                <Setter Property="VisualStateManager.VisualStateGroups">
+                    <VisualStateGroupList>
+                        <VisualStateGroup x:Name="CommonStates">
+                            <VisualState x:Name="Normal">
+                                <VisualState.Setters>
+                                    <Setter Property="Scale" Value="1" />
+                                    <Setter Property="Opacity" Value="1" />
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Pressed">
+                                <VisualState.Setters>
+                                    <Setter Property="Scale" Value="0.97" />
+                                    <Setter Property="Opacity" Value="0.78" />
+                                </VisualState.Setters>
+                            </VisualState>
+                            <VisualState x:Name="Disabled">
+                                <VisualState.Setters>
+                                    <Setter Property="BackgroundColor" Value="{DynamicResource QuaternarySystemFill}" />
+                                    <Setter Property="TextColor" Value="{DynamicResource TertiaryLabel}" />
+                                </VisualState.Setters>
+                            </VisualState>
+                        </VisualStateGroup>
+                    </VisualStateGroupList>
+                </Setter>
+            </Style>
+
+            <!-- Карточка поверх камеры: glass-opaque (стекло на Android не имитируем), radius-card 26, кромка glass-edge. -->
+            <Style x:Key="Card" TargetType="Border">
+                <Setter Property="BackgroundColor" Value="{DynamicResource GlassOpaque}" />
+                <Setter Property="Stroke" Value="{DynamicResource GlassEdge}" />
+                <Setter Property="StrokeThickness" Value="1" />
+                <Setter Property="StrokeShape" Value="RoundRectangle 26" />
+                <Setter Property="Padding" Value="20,16,16,16" />
+            </Style>
+            <Style x:Key="Chip" TargetType="Border">
+                <Setter Property="BackgroundColor" Value="{DynamicResource GlassOpaque}" />
+                <Setter Property="Stroke" Value="{DynamicResource GlassEdge}" />
+                <Setter Property="StrokeThickness" Value="1" />
+                <Setter Property="StrokeShape" Value="RoundRectangle 16" />
+                <Setter Property="Padding" Value="14,7" />
+                <Setter Property="MinimumHeightRequest" Value="32" />
+            </Style>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 192 192">
+  <!-- Знак значка на чёрном фоне заставки: рамка сканирования оранжевым акцентом, лицо белым. -->
+  <g fill="none" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <g stroke="#FF9230">
+      <path d="M40 72 V52 a12 12 0 0 1 12 -12 H72"/>
+      <path d="M120 40 H140 a12 12 0 0 1 12 12 V72"/>
+      <path d="M152 120 V140 a12 12 0 0 1 -12 12 H120"/>
+      <path d="M72 152 H52 a12 12 0 0 1 -12 -12 V120"/>
+    </g>
+    <path stroke="#FFFFFF" d="M76 112 q20 16 40 0"/>
+  </g>
+  <g fill="#FFFFFF">
+    <circle cx="76" cy="86" r="7"/>
+    <circle cx="116" cy="86" r="7"/>
+  </g>
+</svg>

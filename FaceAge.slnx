@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/FaceAge/FaceAge.csproj" />
+  <Project Path="tests/FaceAge.Tests/FaceAge.Tests.csproj" />
+</Solution>

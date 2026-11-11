@@ -1,0 +1,77 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<!-- Только Android: iOS, Windows и Mac Catalyst приложению не нужны. -->
+		<TargetFramework>net11.0-android</TargetFramework>
+		<OutputType>Exe</OutputType>
+		<RootNamespace>FaceAge</RootNamespace>
+		<UseMaui>true</UseMaui>
+		<SingleProject>true</SingleProject>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<Nullable>enable</Nullable>
+		<!-- Кадр камеры читается прямо из direct ByteBuffer, без копии в управляемую память. -->
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+		<ApplicationTitle>FaceAge</ApplicationTitle>
+		<ApplicationId>com.sata.faceage</ApplicationId>
+		<ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+		<ApplicationVersion>1</ApplicationVersion>
+		<SupportedOSPlatformVersion>26.0</SupportedOSPlatformVersion>
+
+		<!-- arm64 — телефоны, x64 — эмулятор; armeabi-v7a и x86 не собираются: APK меньше вдвое. -->
+		<RuntimeIdentifiers>android-arm64;android-x64</RuntimeIdentifiers>
+
+		<!-- XAML компилируется генератором исходников: без разбора XAML при запуске и без рефлексии. -->
+		<MauiXamlInflator>SourceGen</MauiXamlInflator>
+	</PropertyGroup>
+
+	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
+		<AndroidPackageFormat>apk</AndroidPackageFormat>
+		<!-- Телефоны — arm64; x64 нужен только эмулятору (Debug). libonnxruntime.so — 13–15 МБ на ABI,
+		     поэтому одна архитектура вдвое уменьшает APK. Для эмулятора: -p:RuntimeIdentifiers=android-x64. -->
+		<RuntimeIdentifiers>android-arm64</RuntimeIdentifiers>
+		<!-- Полная обрезка IL + R8 для Java-кода: меньше размер и быстрее холодный старт. -->
+		<TrimMode>full</TrimMode>
+		<AndroidLinkTool>r8</AndroidLinkTool>
+		<!-- AOT по профилю запуска (по умолчанию в Release): быстрый старт без раздувания APK полным AOT. -->
+		<AndroidEnableProfiledAot>true</AndroidEnableProfiledAot>
+		<DebugSymbols>false</DebugSymbols>
+		<DebugType>none</DebugType>
+	</PropertyGroup>
+
+	<!--
+		Подпись ключом SataKeyStore. Пароли в проект не пишутся: сборка берёт их из переменных окружения
+		FACEAGE_STORE_PASS и FACEAGE_KEY_PASS, псевдоним ключа — из FACEAGE_KEY_ALIAS (см. build-apk.bat).
+		Без FACEAGE_STORE_PASS Release подписывается отладочным ключом.
+	-->
+	<PropertyGroup Condition="'$(Configuration)' == 'Release' And '$(FACEAGE_STORE_PASS)' != ''">
+		<AndroidKeyStore>true</AndroidKeyStore>
+		<AndroidSigningKeyStore Condition="'$(AndroidSigningKeyStore)' == ''">E:\Works_Sata\Chrono-Alarm\Keystore\SataKeyStore\SataKeyStore.keystore</AndroidSigningKeyStore>
+		<AndroidSigningKeyAlias>$(FACEAGE_KEY_ALIAS)</AndroidSigningKeyAlias>
+		<AndroidSigningStorePass>env:FACEAGE_STORE_PASS</AndroidSigningStorePass>
+		<AndroidSigningKeyPass>env:FACEAGE_KEY_PASS</AndroidSigningKeyPass>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<MauiIcon Include="Resources\AppIcon\appicon.svg" ForegroundFile="Resources\AppIcon\appiconfg.svg" />
+		<MauiSplashScreen Include="Resources\Splash\splash.svg" Color="#000000" BaseSize="192,192" />
+		<MauiFont Include="Resources\Fonts\*" />
+		<MauiAsset Include="Resources\Raw\**" LogicalName="%(RecursiveDir)%(Filename)%(Extension)" />
+	</ItemGroup>
+
+	<!-- Модель возраста не хранится в репозитории (лицензия InsightFace) — без неё приложение собралось бы, но не работало. -->
+	<Target Name="CheckAgeModel" BeforeTargets="Build" Condition="!Exists('Resources\Raw\genderage.onnx')">
+		<Error Text="Нет Resources\Raw\genderage.onnx. Запустите fetch-assets.ps1 в корне репозитория." />
+	</Target>
+
+	<ItemGroup>
+		<PackageReference Include="Microsoft.Maui.Controls" Version="$(MauiVersion)" />
+		<!-- Детектор лица и модель возраста — ONNX на CPU телефона, без сети. -->
+		<PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.31.1" />
+		<!-- CameraX: превью и поток кадров RGBA для анализа. -->
+		<PackageReference Include="Xamarin.AndroidX.Camera.Camera2" Version="1.6.1.1" />
+		<PackageReference Include="Xamarin.AndroidX.Camera.Lifecycle" Version="1.6.1.1" />
+		<PackageReference Include="Xamarin.AndroidX.Camera.View" Version="1.6.1.1" />
+	</ItemGroup>
+
+</Project>

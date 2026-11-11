@@ -1,0 +1,20 @@
+bin/
+obj/
+dist/
+.vs/
+*.user
+*.binlog
+*.log
+*.download
+shot-*.png
+
+# Ключи и локальные секреты подписи.
+*.keystore
+*.jks
+*.local.*
+CLAUDE.local.md
+.claude/process.md
+
+# Лицензия не разрешает публикацию — скачивается скриптом fetch-assets.ps1.
+src/FaceAge/Resources/Raw/genderage.onnx
+tests/FaceAge.Tests/Photos/*.jpg

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="456" height="456" viewBox="0 0 456 456">
+  <!-- Рамка сканирования и лицо в безопасной зоне adaptive icon (центральные ~61 %). -->
+  <g fill="none" stroke="#FFFFFF" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M148 186 V160 a12 12 0 0 1 12 -12 H186"/>
+    <path d="M270 148 H296 a12 12 0 0 1 12 12 V186"/>
+    <path d="M308 270 V296 a12 12 0 0 1 -12 12 H270"/>
+    <path d="M186 308 H160 a12 12 0 0 1 -12 -12 V270"/>
+    <path d="M196 262 q32 26 64 0"/>
+  </g>
+  <g fill="#FFFFFF">
+    <circle cx="196" cy="208" r="12"/>
+    <circle cx="260" cy="208" r="12"/>
+  </g>
+</svg>

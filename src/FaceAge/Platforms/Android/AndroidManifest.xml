@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+	<application android:allowBackup="false" android:icon="@mipmap/appicon" android:roundIcon="@mipmap/appicon_round" android:supportsRtl="true">
+		<!-- AAR ONNX Runtime 1.31 регистрирует провайдер телеметрии, который стартует вместе с процессом и
+		     поднимает HTTP-клиент. Приложению с камерой сеть не нужна, а лишний провайдер замедляет холодный старт. -->
+		<provider android:name="ai.onnxruntime.TelemetryInitializer"
+		          android:authorities="${applicationId}.onnxruntime_telemetry_initializer"
+		          tools:node="remove" />
+	</application>
+	<uses-permission android:name="android.permission.CAMERA" />
+	<!-- Разрешения, которые приносят библиотеки (Essentials, AndroidX): приложению они не нужны,
+	     а в карточке Google Play выглядели бы подозрительно у приложения с камерой.
+	     INTERNET оставлен: без него не работает отладчик Debug-сборки; сетевых вызовов в коде нет. -->
+	<uses-permission android:name="android.permission.USE_BIOMETRIC" tools:node="remove" />
+	<uses-permission android:name="android.permission.USE_FINGERPRINT" tools:node="remove" />
+	<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
+	<!-- Камера нужна, но Google Play не должен скрывать приложение от планшетов без фронтальной. -->
+	<uses-feature android:name="android.hardware.camera.front" android:required="false" />
+</manifest>

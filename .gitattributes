@@ -1,0 +1,7 @@
+* text=auto
+# cmd разбирает .bat с окончаниями LF неверно: строки с кириллицей режутся на части.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.onnx binary
+*.ttf binary
+*.jpg binary
