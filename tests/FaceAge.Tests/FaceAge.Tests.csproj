@@ -23,6 +23,7 @@
   <!-- Проверяется ровно код приложения: файл подключён ссылкой, не копией. -->
   <ItemGroup>
     <Compile Include="..\..\src\FaceAge\Vision\AgeEstimator.cs" Link="Linked\AgeEstimator.cs" />
+    <Compile Include="..\..\src\FaceAge\Vision\AgeWindow.cs" Link="Linked\AgeWindow.cs" />
   </ItemGroup>
 
   <ItemGroup>

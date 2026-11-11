@@ -23,7 +23,7 @@
                                SemanticProperties.Description="Возраст пока не определён" />
                         <Label x:Name="AgeUnitLabel" Style="{StaticResource HeroUnit}" VerticalOptions="End" Margin="0,0,0,14" />
                     </HorizontalStackLayout>
-                    <Label Grid.Row="2" Style="{StaticResource Footnote}" Text="Оценка по лицу, обычно ±5 лет" />
+                    <Label Grid.Row="2" Style="{StaticResource Footnote}" Text="Средняя ошибка 13–40 лет — около 6 лет" />
 
                     <Button x:Name="ActionButton" Grid.Column="1" Grid.RowSpan="3" VerticalOptions="End"
                             Style="{StaticResource FilledButton}" Text="Пауза" IsEnabled="False"

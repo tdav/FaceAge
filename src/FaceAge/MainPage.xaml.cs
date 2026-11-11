@@ -5,16 +5,15 @@ namespace FaceAge;
 
 public partial class MainPage : ContentPage
 {
-    // Сглаживание: доля нового кадра в среднем. 0,15 при ~25 кадрах/с — устоявшееся значение за ~0,5 с.
-    private const float Smoothing = 0.15f;
-
     // Сколько кадров подряд без лица терпим, прежде чем сбросить значение (~0,6 с).
     private const int LostFaceFrames = 15;
 
     private readonly FaceOverlay overlay = new();
     private readonly Task<AgeEstimator> loading;
+
+    // Медиана годных кадров за 3 с; первый результат — после 10 годных кадров (меньше секунды при 15+ кадрах/с).
+    private readonly AgeWindow window = new(TimeSpan.FromSeconds(3), 10);
     private FaceCameraView? camera;
-    private float? smoothedAge;
     private int missedFrames;
     private bool permissionDenied;
 
@@ -26,7 +25,7 @@ public partial class MainPage : ContentPage
         // Модели грузятся сразу, параллельно с запросом разрешения: создание двух ONNX-сессий занимает ~0,2 с.
         this.loading = Task.Run(async () =>
         {
-            using var detector = await FileSystem.OpenAppPackageFileAsync("ultraface_rfb320.onnx");
+            using var detector = await FileSystem.OpenAppPackageFileAsync("yunet_320.onnx");
             using var ager = await FileSystem.OpenAppPackageFileAsync("genderage.onnx");
             using var detectorBytes = new MemoryStream();
             using var agerBytes = new MemoryStream();
@@ -126,7 +125,7 @@ public partial class MainPage : ContentPage
         {
             if (++this.missedFrames == LostFaceFrames)
             {
-                this.smoothedAge = null;
+                this.window.Clear();
                 this.overlay.Face = null;
                 this.AgeLabel.Text = "—";
                 this.AgeUnitLabel.Text = string.Empty;
@@ -139,9 +138,35 @@ public partial class MainPage : ContentPage
         }
 
         this.missedFrames = 0;
-        this.smoothedAge = this.smoothedAge is { } previous ? previous + (reading.Age - previous) * Smoothing : reading.Age;
+        this.overlay.Face = reading.Face;
+        this.overlay.Frame = reading.Frame;
 
-        var years = Math.Max(1, (int)MathF.Round(this.smoothedAge.Value));
+        // Плохой кадр в оценку не идёт: рамка серая, в строке состояния — что исправить. Прежнее значение остаётся.
+        if (reading.Quality != FaceQuality.Good)
+        {
+            this.overlay.Stroke = Colors.Gray;
+            this.Overlay.Invalidate();
+            this.StatusLabel.Text = reading.Quality switch
+            {
+                FaceQuality.TooSmall => "Подойдите ближе",
+                FaceQuality.Turned => "Смотрите прямо в камеру",
+                FaceQuality.Blurry => "Держите телефон неподвижно",
+                FaceQuality.TooDark => "Слишком темно",
+                _ => "Слишком яркий свет",
+            };
+            return;
+        }
+
+        this.overlay.Stroke = (Color)Application.Current!.Resources["Tint"];
+        this.Overlay.Invalidate();
+        this.window.Add(reading.Age, TimeSpan.FromMilliseconds(Environment.TickCount64));
+        if (this.window.Median() is not { } median)
+        {
+            this.StatusLabel.Text = $"Измерение… {this.window.Count * 100 / this.window.MinSamples}%";
+            return;
+        }
+
+        var years = Math.Max(1, (int)MathF.Round(median));
         var unit = (years % 10, years % 100) switch
         {
             (1, not 11) => "год",
@@ -157,11 +182,6 @@ public partial class MainPage : ContentPage
 #else
         this.StatusLabel.Text = "Лицо найдено";
 #endif
-
-        this.overlay.Face = reading.Face;
-        this.overlay.Frame = reading.Frame;
-        this.overlay.Stroke = (Color)Application.Current!.Resources["Tint"];
-        this.Overlay.Invalidate();
     }
 
     /// <summary>Рамка лица поверх превью.</summary>
