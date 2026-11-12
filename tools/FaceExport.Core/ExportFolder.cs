@@ -53,7 +53,15 @@ public sealed class ExportFolder : IDisposable
         var progressPath = Path.Combine(path, "progress.jsonl");
         if (File.Exists(progressPath))
         {
-            foreach (var line in File.ReadAllLines(progressPath, Utf8))
+            // Строка без завершающего \n — оборванная: пара не завершена, даже если строка разбирается как JSON.
+            var progressText = File.ReadAllText(progressPath, Utf8);
+            var complete = progressText[..(progressText.LastIndexOf('\n') + 1)];
+            if (complete.Length != progressText.Length)
+            {
+                File.WriteAllText(progressPath, complete, Utf8);
+            }
+
+            foreach (var line in complete.Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
                 try
                 {
