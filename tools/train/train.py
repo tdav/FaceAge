@@ -15,8 +15,9 @@ from dataset import FaceDataset, balanced_sampler, in_target, is_val, read_expor
 from models import LARGE_INPUT, SMALL_INPUT, build_large, build_small, export_onnx, loss_fn, predict_age
 
 # Пороги сверки с полем pred (смещение, средняя абсолютная разница). Пробный прогон на UTKFace: правильный препроцессинг —
-# -0.65 и 0.91; порядок каналов B,G,R — +7.31 и 14.10; кадр целиком вместо вида телефона — +1.74 и 4.26.
-PRED_BIAS_LIMIT = 1.0
+# -0.65 и 0.91 (разброс нормы между прогонами: смещение -0.60…-0.75); порядок каналов B,G,R — +7.31 и 14.10;
+# кадр целиком вместо вида телефона — +1.74 и 4.26. Порог смещения 1.5 оставляет запас над нормой; вторую поломку ловит разница.
+PRED_BIAS_LIMIT = 1.5
 PRED_MAD_LIMIT = 2.0
 
 # Копия AgeEstimator.Calibration (src/FaceAge/Vision/AgeEstimator.cs) на 2026-11-12.
@@ -25,6 +26,9 @@ CALIBRATION = [(8.1, 2.0), (24.0, 22.0), (26.7, 25.0), (29.0, 26.0), (31.3, 26.0
 
 DEFAULT_LR = {"small": 0.0003, "large": 0.001}
 DEFAULT_FREEZE_BN = {"small": True, "large": False}
+
+WARN_TEXT = ("Сверка с оценками нынешней модели превышена. Это может означать ошибку подготовки кадров, а может — "
+             "особенность ваших фото. Обучение продолжается. Пришлите эту строку и файл export.json.")
 
 MODES = ("clean", "phone")
 NAMES = {"original": "исходная", "calibrated": "исходная с поправкой", "trained": "обученная"}
@@ -161,10 +165,10 @@ def main() -> None:
     pred_check["ok"] = abs(pred_check["bias"]) <= PRED_BIAS_LIMIT and pred_check["mad"] <= PRED_MAD_LIMIT
     pred_text = (f"Сверка pred: смещение {pred_check['bias']:+.2f} (порог {PRED_BIAS_LIMIT}), "
                  f"средняя абсолютная разница {pred_check['mad']:.2f} (порог {PRED_MAD_LIMIT}): "
-                 + ("в норме" if pred_check["ok"] else "ПРЕВЫШЕН ПОРОГ"))
+                 + ("в норме" if pred_check["ok"] else "ПРЕВЫШЕН ПОРОГ. " + WARN_TEXT))
     print(pred_text)
     if not pred_check["ok"]:
-        print("!" * 70 + "\nВНИМАНИЕ: препроцессинг не совпадает с телефоном (каналы, масштаб кропа, нормализация?).\n" + "!" * 70)
+        print("!" * 70 + "\nВНИМАНИЕ: " + WARN_TEXT + "\n" + "!" * 70)
 
     epoch_seconds = []
     for epoch in range(start, args.epochs):
