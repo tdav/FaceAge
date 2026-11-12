@@ -23,6 +23,9 @@ PRED_MAD_LIMIT = 2.0
 CALIBRATION = [(8.1, 2.0), (24.0, 22.0), (26.7, 25.0), (29.0, 26.0), (31.3, 26.0), (34.0, 28.0),
                (37.3, 30.0), (41.3, 34.0), (47.2, 39.0), (55.3, 47.0), (65.3, 55.0), (75.4, 66.0)]
 
+DEFAULT_LR = {"small": 0.0003, "large": 0.001}
+DEFAULT_FREEZE_BN = {"small": True, "large": False}
+
 MODES = ("clean", "phone")
 NAMES = {"original": "исходная", "calibrated": "исходная с поправкой", "trained": "обученная"}
 
@@ -93,12 +96,18 @@ def main() -> None:
     p.add_argument("--genderage", default=str(here / "../../src/FaceAge/Resources/Raw/genderage.onnx"))
     p.add_argument("--epochs", type=int, default=30)
     p.add_argument("--batch", type=int, default=128)
-    p.add_argument("--lr", type=float, default=0.001)
+    p.add_argument("--lr", type=float, default=None, help="по умолчанию: small 0.0003, large 0.001")
+    p.add_argument("--freeze-bn", action=argparse.BooleanOptionalAction, default=None,
+                   help="BatchNorm в режиме eval при обучении (скользящие средние не меняются); по умолчанию: small да, large нет")
     p.add_argument("--workers", type=int, default=4)
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--no-pretrained", action="store_true")
     p.add_argument("--resume", action="store_true")
     args = p.parse_args()
+    if args.lr is None:
+        args.lr = DEFAULT_LR[args.model]
+    if args.freeze_bn is None:
+        args.freeze_bn = DEFAULT_FREEZE_BN[args.model]
 
     samples, export = read_export(args.data)
     if args.limit:
@@ -161,6 +170,10 @@ def main() -> None:
     for epoch in range(start, args.epochs):
         t0 = time.time()
         model.train()
+        if args.freeze_bn:
+            for module in model.modules():
+                if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
+                    module.eval()
         total, count = 0.0, 0
         for data, age in train_loader:
             data, age = data.to(device), age.to(device)
