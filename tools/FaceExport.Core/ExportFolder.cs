@@ -48,9 +48,15 @@ public sealed class ExportFolder : IDisposable
             }
         }
 
-        // Завершённые пары и число сохранённых по ним фото.
-        var saved = 0;
+        // Временные файлы прошлого сбоя при переписывании не нужны: исходные файлы остались целыми.
         var progressPath = Path.Combine(path, "progress.jsonl");
+        var metadataPath = Path.Combine(path, "metadata.jsonl");
+        File.Delete(progressPath + ".tmp");
+        File.Delete(metadataPath + ".tmp");
+
+        // Сначала всё читается и проверяется, и только потом файлы меняются: повреждённая папка остаётся нетронутой.
+        var saved = 0;
+        string? progressRewrite = null;
         if (File.Exists(progressPath))
         {
             // Строка без завершающего \n — оборванная: пара не завершена, даже если строка разбирается как JSON.
@@ -58,47 +64,75 @@ public sealed class ExportFolder : IDisposable
             var complete = progressText[..(progressText.LastIndexOf('\n') + 1)];
             if (complete.Length != progressText.Length)
             {
-                File.WriteAllText(progressPath, complete, Utf8);
+                progressRewrite = complete;
             }
 
-            foreach (var line in complete.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            var progressLines = complete.Split('\n');
+            for (var number = 1; number < progressLines.Length; number++)
             {
                 try
                 {
-                    using var pair = JsonDocument.Parse(line);
-                    this.completed.Add((pair.RootElement.GetProperty("age").GetInt32(), pair.RootElement.GetProperty("sex").GetString()!));
+                    using var pair = JsonDocument.Parse(progressLines[number - 1]);
+                    var age = pair.RootElement.GetProperty("age").GetInt32();
+                    var sex = pair.RootElement.GetProperty("sex").GetString()!;
                     saved += pair.RootElement.GetProperty("saved").GetInt32();
+                    this.completed.Add((age, sex));
                 }
-                catch (JsonException)
+                catch (Exception e) when (e is JsonException or KeyNotFoundException or InvalidOperationException or FormatException or ArgumentNullException)
                 {
-                    // Оборванная последняя строка: пара не завершена.
+                    throw new InvalidOperationException($"Папка повреждена: строка {number} файла progress.jsonl не читается. Выберите новую папку", e);
                 }
             }
         }
 
         // Откат: в metadata.jsonl остаются первые saved строк, файлы лишних удаляются.
-        var metadataPath = Path.Combine(path, "metadata.jsonl");
+        string[] lines = [];
         if (File.Exists(metadataPath))
         {
-            var lines = File.ReadAllLines(metadataPath, Utf8);
-            foreach (var extra in lines.Skip(saved))
+            lines = File.ReadAllLines(metadataPath, Utf8);
+        }
+
+        if (lines.Length < saved)
+        {
+            throw new InvalidOperationException($"Папка повреждена: в metadata.jsonl {lines.Length} строк, а в progress.jsonl записано {saved}. Выберите новую папку");
+        }
+
+        if (progressRewrite is not null)
+        {
+            var tmp = progressPath + ".tmp";
+            using (var stream = new FileStream(tmp, FileMode.Create, FileAccess.Write))
             {
-                try
-                {
-                    using var row = JsonDocument.Parse(extra);
-                    File.Delete(Path.Combine(path, "images", row.RootElement.GetProperty("file").GetString()!.Replace('/', Path.DirectorySeparatorChar)));
-                }
-                catch (JsonException)
-                {
-                    // Оборванная строка: файла у неё нет.
-                }
+                stream.Write(Utf8.GetBytes(progressRewrite));
+                stream.Flush(true);
             }
 
-            this.Dropped = Math.Max(0, lines.Length - saved);
-            if (this.Dropped > 0)
+            File.Move(tmp, progressPath, true);
+        }
+
+        foreach (var extra in lines.Skip(saved))
+        {
+            try
             {
-                File.WriteAllText(metadataPath, string.Concat(lines.Take(saved).Select(x => x + "\n")), Utf8);
+                using var row = JsonDocument.Parse(extra);
+                File.Delete(Path.Combine(path, "images", row.RootElement.GetProperty("file").GetString()!.Replace('/', Path.DirectorySeparatorChar)));
             }
+            catch (JsonException)
+            {
+                // Оборванная строка: файла у неё нет.
+            }
+        }
+
+        this.Dropped = lines.Length - saved;
+        if (this.Dropped > 0)
+        {
+            var tmp = metadataPath + ".tmp";
+            using (var stream = new FileStream(tmp, FileMode.Create, FileAccess.Write))
+            {
+                stream.Write(Utf8.GetBytes(string.Concat(lines.Take(saved).Select(x => x + "\n"))));
+                stream.Flush(true);
+            }
+
+            File.Move(tmp, metadataPath, true);
         }
 
         this.metadata = new FileStream(metadataPath, FileMode.Append, FileAccess.Write, FileShare.Read);

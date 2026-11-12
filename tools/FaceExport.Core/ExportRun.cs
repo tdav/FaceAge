@@ -110,6 +110,11 @@ public sealed class ExportRun
             {
                 token.ThrowIfCancellationRequested();
                 using var reader = command.ExecuteReader();
+                if (reader.FieldCount < 3)
+                {
+                    throw new InvalidOperationException($"Запрос должен вернуть три поля (фото, дата рождения, дата съёмки), а вернул {reader.FieldCount}");
+                }
+
                 while (reader.Read())
                 {
                     token.ThrowIfCancellationRequested();

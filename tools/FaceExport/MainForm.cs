@@ -131,7 +131,7 @@ public sealed class MainForm : Form
                 }
             }
         }
-        catch (Exception e) when (e is IOException or JsonException or FormatException or UnauthorizedAccessException)
+        catch (Exception e) when (e is IOException or JsonException or FormatException or OverflowException or UnauthorizedAccessException)
         {
             // Повреждённые настройки не мешают запуску: остаются значения по умолчанию.
             this.log.Text = "Настройки не прочитаны: " + e.Message;
@@ -324,7 +324,7 @@ public sealed class MainForm : Form
         catch (Exception ex)
         {
             failed = true;
-            outcome = ex.Message;
+            outcome = passwordText.Length == 0 ? ex.Message : ex.Message.Replace(passwordText, "***");
         }
 
         // Пароль нужен только на время работы: следующий запуск требует ввести его заново.
