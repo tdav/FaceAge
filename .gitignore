@@ -18,3 +18,8 @@ CLAUDE.local.md
 # Лицензия не разрешает публикацию — скачивается скриптом fetch-assets.ps1.
 src/FaceAge/Resources/Raw/genderage.onnx
 tests/FaceAge.Tests/Photos/*.jpg
+
+# Обучение модели возраста.
+__pycache__/
+tools/train/runs/
+*.pt
