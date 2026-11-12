@@ -139,7 +139,8 @@ class FaceDataset(Dataset):
             small = max(8, round(rng.uniform(c["low"][1], c["low"][2]) * w))  # доля входа
             img = img.resize((small, small), Image.BILINEAR).resize((w, w), Image.BILINEAR)
         if rng.random() < c["blur"][0]:
-            img = img.filter(ImageFilter.GaussianBlur(rng.uniform(c["blur"][1], c["blur"][2])))
+            # сила размытия задана для входа 96; для другого входа масштабируется, чтобы относительно лица была та же
+            img = img.filter(ImageFilter.GaussianBlur(rng.uniform(c["blur"][1], c["blur"][2]) * w / 96))
         if c["bright"]:
             img = ImageEnhance.Brightness(img).enhance(1 + rng.uniform(-c["bright"], c["bright"]))
         if c["contrast"]:

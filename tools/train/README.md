@@ -5,7 +5,7 @@
 Две модели обучаются отдельно, одна за другой:
 
 - `small` — доработка нынешней модели приложения. В приложении меняется только файл.
-- `large` — более крупная сеть. Обычно точнее, но в приложении нужны небольшие правки (размер входа и имя выхода).
+- `large` — более крупная сеть. Ожидается точнее (на ваших данных не проверялось), но в приложении нужны небольшие правки (размер входа и имя выхода).
 
 ## 1. Что нужно
 
@@ -47,7 +47,7 @@ C:\FaceAge\venv\Scripts\python.exe -m pip install torch==2.14.1 torchvision==0.2
 **Шаг 3. Поставить остальные пакеты.**
 
 ```powershell
-C:\FaceAge\venv\Scripts\python.exe -m pip install -r requirements.txt
+C:\FaceAge\venv\Scripts\python.exe -m pip install -r C:\FaceAge\train\requirements.txt
 ```
 
 Должно получиться: `Successfully installed ...` без красных ошибок. Версии в файле зафиксированы, менять их нельзя. Пакеты `torch` и `torchvision` уже стоят, они не будут заменены.
@@ -67,25 +67,25 @@ C:\FaceAge\venv\Scripts\python.exe -c "import torch; print(torch.cuda.is_availab
 Прежде чем запускать полное обучение, прогоните короткое: `--epochs 1 --limit 600` (600 фото, одна эпоха). Оно проверяет весь путь до `model.onnx`; точность при этом не важна.
 
 ```powershell
-C:\FaceAge\venv\Scripts\python.exe train.py --data C:\FaceAge\export --genderage C:\FaceAge\genderage.onnx --model small --epochs 1 --limit 600 --out C:\FaceAge\runs\check
+C:\FaceAge\venv\Scripts\python.exe C:\FaceAge\train\train.py --data C:\FaceAge\export --genderage C:\FaceAge\genderage.onnx --model small --epochs 1 --limit 600 --out C:\FaceAge\runs\check
 ```
 
-Должно получиться: в конце `Готово: C:\FaceAge\runs\check`, в папке есть `model.onnx` и `report.md`. Для `large` то же с `--model large`.
+Должно получиться: в конце `Готово: C:\FaceAge\runs\check`, в папке есть `model.onnx` и `report.md`. Для `large` то же с `--model large`. **Для `large` нужен интернет**: при первом запуске программа один раз скачивает готовые стартовые веса основы сети (около 20 МБ), дальше они берутся из кэша на этом компьютере. Без сети первый запуск `large` завершится ошибкой загрузки.
 
 **Что проверено, а что нет.** Всё это проверено только на процессоре, на публичном наборе фото UTKFace. Обучение на видеокарте и модель `large` с настоящими стартовыми весами впервые запускаются у вас. Если после первой эпохи MAE (режим phone) выше 15–20 лет, остановите обучение (Ctrl+C) и сообщите разработчику.
 
 ### 4.2. Полное обучение
 
-Сначала `small`. Запускайте из папки `C:\FaceAge\train`.
+Сначала `small`. Команды можно вводить из любой папки.
 
 ```powershell
-C:\FaceAge\venv\Scripts\python.exe train.py --data C:\FaceAge\export --genderage C:\FaceAge\genderage.onnx --model small --out C:\FaceAge\runs\small
+C:\FaceAge\venv\Scripts\python.exe C:\FaceAge\train\train.py --data C:\FaceAge\export --genderage C:\FaceAge\genderage.onnx --model small --out C:\FaceAge\runs\small
 ```
 
-Затем `large`. При первом запуске **нужен интернет**: программа один раз скачивает готовые стартовые веса основы сети (около 20 МБ), дальше они берутся из кэша на этом компьютере. Без сети первый запуск `large` завершится ошибкой загрузки.
+Затем `large` (при первом запуске нужен интернет, см. 4.1).
 
 ```powershell
-C:\FaceAge\venv\Scripts\python.exe train.py --data C:\FaceAge\export --genderage C:\FaceAge\genderage.onnx --model large --out C:\FaceAge\runs\large
+C:\FaceAge\venv\Scripts\python.exe C:\FaceAge\train\train.py --data C:\FaceAge\export --genderage C:\FaceAge\genderage.onnx --model large --out C:\FaceAge\runs\large
 ```
 
 Что должно получиться:
@@ -146,9 +146,9 @@ C:\FaceAge\venv\Scripts\python.exe train.py --data C:\FaceAge\export --genderage
 **Обучение прервалось** (выключили компьютер, нажали Ctrl+C, ошибка). После каждой эпохи программа сохраняет `last.pt`. Повторите ту же команду с добавлением `--resume` в конце, с тем же `--out`:
 
 ```powershell
-C:\FaceAge\venv\Scripts\python.exe train.py --data C:\FaceAge\export --genderage C:\FaceAge\genderage.onnx --model small --out C:\FaceAge\runs\small --resume
+C:\FaceAge\venv\Scripts\python.exe C:\FaceAge\train\train.py --data C:\FaceAge\export --genderage C:\FaceAge\genderage.onnx --model small --out C:\FaceAge\runs\small --resume
 ```
 
-Должно получиться: строка `Продолжение с эпохи N`, и обучение идёт дальше с места остановки. Остальные параметры (`--epochs`, `--lr`, `--freeze-bn` и т. д.) оставляйте теми же, что в первом запуске, кроме `--batch`, если причина была в памяти.
+Должно получиться: строка `Продолжение с эпохи N`, и обучение идёт дальше с места остановки. Остальные параметры (`--epochs`, `--lr`, `--freeze-bn` и т. д.) оставляйте теми же, что в первом запуске, Менять `--batch` при продолжении нельзя: сдвинется расписание скорости обучения. Если причина была в памяти, начните обучение заново с меньшим `--batch`.
 
 **Сообщение «В отложенной части нет фото 13–50 лет»** — в экспорте нет нужных возрастов. Нужен другой экспорт.

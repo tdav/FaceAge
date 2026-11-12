@@ -47,10 +47,10 @@ def calibrate(age: float) -> float:
     return a0 + (age - r0) * (a1 - a0) / (r1 - r0)
 
 
-def make_loader(samples, export, size, mode, args, shuffle=False, sampler=None, device="cpu"):
+def make_loader(samples, export, size, mode, args, shuffle=False, sampler=None, device="cpu", persistent=False):
     ds = FaceDataset(samples, export, size, mode)
     return DataLoader(ds, batch_size=args.batch, shuffle=shuffle and sampler is None, sampler=sampler,
-                      num_workers=args.workers, persistent_workers=args.workers > 0,
+                      num_workers=args.workers, persistent_workers=persistent and args.workers > 0,
                       pin_memory=device == "cuda", drop_last=sampler is not None and len(samples) > args.batch)
 
 
@@ -134,16 +134,18 @@ def main() -> None:
     model = (build_small(args.genderage) if kind == "small" else build_large(not args.no_pretrained)).to(device)
 
     opt = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    train_loader = make_loader(train, export, size, "train", args, sampler=balanced_sampler(train), device=device)
+    train_loader = make_loader(train, export, size, "train", args, sampler=balanced_sampler(train), device=device,
+                              persistent=True)  # только у обучающего: процессы живут всё обучение
     steps = args.epochs * len(train_loader)
     warm = len(train_loader)  # разогрев — одна эпоха
     sched = torch.optim.lr_scheduler.LambdaLR(
         opt, lambda i: (i + 1) / warm if i < warm else 0.5 * (1 + math.cos(math.pi * (i - warm) / max(1, steps - warm))))
     scaler = torch.amp.GradScaler(enabled=device == "cuda")
-    val_loaders = {m: make_loader(val_t, export, size, m, args, device=device) for m in MODES}
 
     history, best, start = [], float("inf"), 0
-    if args.resume:
+    if args.resume and not (out / "last.pt").is_file():
+        print("Контрольной точки нет — обучение начинается сначала")
+    elif args.resume:
         ck = torch.load(out / "last.pt", map_location=device)
         model.load_state_dict(ck["model"])
         opt.load_state_dict(ck["opt"])
@@ -192,7 +194,8 @@ def main() -> None:
             count += len(age)
         mae = {}
         for m in MODES:
-            pr = evaluate(model, kind, val_loaders[m], device)
+            # загрузчик оценки живёт только на время оценки: процессов одновременно не больше 2 × --workers
+            pr = evaluate(model, kind, make_loader(val_t, export, size, m, args, device=device), device)
             mae[m] = float(np.abs(pr - np.array([s.age for s in val_t])).mean())
         seconds = time.time() - t0
         epoch_seconds.append(seconds)
@@ -205,6 +208,8 @@ def main() -> None:
             torch.save(model.state_dict(), out / "best.pt")
         torch.save({"model": model.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(),
                     "history": history, "best": best, "epoch": epoch + 1}, out / "last.pt")
+
+    del train_loader  # закрывает процессы обучающего загрузчика до финальной оценки
 
     # Результат: лучшая эпоха -> ONNX -> отчёт.
     model.load_state_dict(torch.load(out / "best.pt", map_location=device))
