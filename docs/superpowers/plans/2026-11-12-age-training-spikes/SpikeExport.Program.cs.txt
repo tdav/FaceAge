@@ -1,0 +1,24 @@
+using Microsoft.ML.OnnxRuntime;
+using Oracle.ManagedDataAccess.Client;
+
+internal static class Program
+{
+    [STAThread]
+    private static void Main(string[] args)
+    {
+        if (args.Length > 0)
+        {
+            // Проверка без окна: типы Oracle собираются под .NET 10, нативная onnxruntime.dll загружается.
+            var builder = new OracleConnectionStringBuilder { DataSource = "host:1521/svc", UserID = "u", Password = "p" };
+            using var command = new OracleCommand("select 1 from dual") { BindByName = true, InitialLOBFetchSize = -1, CommandTimeout = 0 };
+            command.Parameters.Add("age", OracleDbType.Int32).Value = 27;
+            command.Parameters.Add("sex", OracleDbType.Varchar2).Value = "F";
+            using var options = new SessionOptions();
+            File.WriteAllText(args[0], $"ok ds={builder.DataSource} params={command.Parameters.Count} ort={OrtEnv.Instance().GetVersionString()} net={Environment.Version}");
+            return;
+        }
+
+        ApplicationConfiguration.Initialize();
+        Application.Run(new Form { Text = "Spike" });
+    }
+}
