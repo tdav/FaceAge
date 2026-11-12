@@ -14,7 +14,8 @@ from torch.utils.data import DataLoader
 from dataset import FaceDataset, balanced_sampler, in_target, is_val, read_export
 from models import LARGE_INPUT, SMALL_INPUT, build_large, build_small, export_onnx, loss_fn, predict_age
 
-# Пороги сверки с полем pred: ПРЕДВАРИТЕЛЬНЫЕ, уточняются пробным прогоном (задача B3).
+# Пороги сверки с полем pred (смещение, средняя абсолютная разница). Пробный прогон на UTKFace: правильный препроцессинг —
+# -0.65 и 0.91; порядок каналов B,G,R — +7.31 и 14.10; кадр целиком вместо вида телефона — +1.74 и 4.26.
 PRED_BIAS_LIMIT = 1.0
 PRED_MAD_LIMIT = 2.0
 
