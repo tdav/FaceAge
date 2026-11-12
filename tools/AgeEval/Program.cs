@@ -2,18 +2,94 @@
 // Использование: dotnet run --project tools/AgeEval -- <папки через ;> [наклон в градусах] [raw.csv]
 // Файлы — вида <номер>_<возраст>.jpg. С третьим аргументом замеряется только настройка по умолчанию
 // без поправки возраста, и сырые оценки пишутся в CSV для подбора поправки (fit_calibration.py).
+// Режим выгрузки: AgeEval export <папки через ;> <папка экспорта> [лимит] [холст] — кропы для обучения (FaceExport.Core).
+// Холст по умолчанию 400 (серое поле, как в замере); 0 — фото подаётся как есть. Модель возраста — FACEAGE_AGE_MODEL.
 // Каждое фото кладётся на серое поле 400×400 (в UTKFace лицо занимает весь кадр — детектору нужен контекст)
 // и, если задан наклон, поворачивается на случайный угол ±наклон: так проверяется выравнивание по глазам.
+using FaceAge.Export;
 using FaceAge.Vision;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats.Jpeg;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
-var maxRoll = args.Length > 1 ? float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 0f;
-var csvPath = args.Length > 2 ? args[2] : null;
 var models = Path.Combine(AppContext.BaseDirectory, "Models");
 var detector = File.ReadAllBytes(Path.Combine(models, "yunet_320.onnx"));
-var ager = File.ReadAllBytes(Path.Combine(models, "genderage.onnx"));
+var ager = File.ReadAllBytes(Environment.GetEnvironmentVariable("FACEAGE_AGE_MODEL") ?? Path.Combine(models, "genderage.onnx"));
+
+if (args[0] == "export")
+{
+    var exportShot = new DateOnly(2020, 7, 1);
+    var exportLimit = args.Length > 3 ? int.Parse(args[3]) : int.MaxValue;
+    var exportCanvas = args.Length > 4 ? int.Parse(args[4]) : 400;
+    var exportFiles = args[1].Split(';')
+        .SelectMany(folder => Directory.GetFiles(folder, "*.jpg"))
+        .Select(file => (File: file, Age: int.Parse(Path.GetFileNameWithoutExtension(file).Split('_')[1])))
+        .OrderBy(x => x.Age).ThenBy(x => x.File, StringComparer.Ordinal)
+        .Take(exportLimit)
+        .ToArray();
+
+    using var cropper = new FaceCropper(detector, ager);
+    using var exportFolder = new ExportFolder(args[2], "yunet_320.onnx");
+    var exportSaved = 0;
+    var exportSkipped = 0;
+    var exportClock = System.Diagnostics.Stopwatch.StartNew();
+    var exportProcessed = 0;
+    var jpegEncoder = new JpegEncoder { Quality = 95 };
+
+    foreach (var group in exportFiles.GroupBy(x => x.Age))
+    {
+        if (exportFolder.Completed.Contains((group.Key, "U")))
+        {
+            continue;
+        }
+
+        var groupSaved = 0;
+        var groupSkipped = 0;
+        foreach (var (file, age) in group)
+        {
+            exportProcessed++;
+            using var photo = Image.Load<Rgba32>(file);
+            var width = exportCanvas > 0 ? exportCanvas : photo.Width;
+            var height = exportCanvas > 0 ? exportCanvas : photo.Height;
+            var rgba = new byte[width * height * 4];
+            if (exportCanvas > 0)
+            {
+                using var field = new Image<Rgba32>(width, height, new Rgba32(128, 128, 128));
+                field.Mutate(x => x.DrawImage(photo, new SixLabors.ImageSharp.Point((width - photo.Width) / 2, (height - photo.Height) / 2), 1f));
+                field.CopyPixelDataTo(rgba);
+            }
+            else
+            {
+                photo.CopyPixelDataTo(rgba);
+            }
+
+            var crop = cropper.Cut(rgba, width, height, width * 4);
+            if (!crop.Found)
+            {
+                groupSkipped++;
+                continue;
+            }
+
+            using var cropImage = Image.LoadPixelData<Rgb24>(crop.Rgb, FaceCropper.Size, FaceCropper.Size);
+            using var jpeg = new MemoryStream();
+            cropImage.SaveAsJpeg(jpeg, jpegEncoder);
+            exportFolder.Add(jpeg.ToArray(), exportShot.AddYears(-age).AddDays(-182), exportShot, "U", crop.Pred);
+            groupSaved++;
+        }
+
+        exportFolder.CompletePair(group.Key, "U", group.Count(), groupSaved, groupSkipped);
+        exportSaved += groupSaved;
+        exportSkipped += groupSkipped;
+    }
+
+    Console.WriteLine($"Сохранено: {exportSaved}, пропущено: {exportSkipped}, откачено при открытии (Dropped): {exportFolder.Dropped}");
+    Console.WriteLine($"Обработано фото: {exportProcessed}, время на фото: {(exportProcessed == 0 ? 0 : exportClock.Elapsed.TotalMilliseconds / exportProcessed):0.0} мс");
+    return;
+}
+
+var maxRoll = args.Length > 1 ? float.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture) : 0f;
+var csvPath = args.Length > 2 ? args[2] : null;
 
 var configs = csvPath is not null
     ? [("по умолчанию, без поправки", new AgeEstimator(detector, ager) { Calibrate = false })]

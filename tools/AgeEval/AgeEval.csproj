@@ -17,7 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\src\FaceAge\Vision\AgeEstimator.cs" Link="Linked\AgeEstimator.cs" />
+    <ProjectReference Include="..\FaceExport.Core\FaceExport.Core.csproj" />
     <None Include="..\..\src\FaceAge\Resources\Raw\*.onnx" Link="Models\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
