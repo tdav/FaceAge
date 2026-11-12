@@ -202,7 +202,7 @@ if (args[0] == "export-db")
         run.Run(
             dbConnection,
             "SELECT photo, birth_date, shoot_date FROM persons WHERE sex = :sex AND age = :age",
-            int.Parse(args[3]), int.Parse(args[4]), args[5].Split(';'),
+            int.Parse(args[3]), int.Parse(args[4]), args[5].Split(';', StringSplitOptions.RemoveEmptyEntries),
             null,
             new SyncProgress<ExportProgress>(p =>
             {
@@ -218,7 +218,7 @@ if (args[0] == "export-db")
         Console.WriteLine("Остановлено");
         Environment.ExitCode = 130;
     }
-    catch (InvalidOperationException e)
+    catch (Exception e) when (e is InvalidOperationException or ArgumentException)
     {
         Console.WriteLine(e.Message);
         Environment.ExitCode = 1;

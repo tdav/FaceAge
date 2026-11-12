@@ -52,6 +52,11 @@ public sealed class ExportRun
             }
         }
 
+        if (pairs.Count == 0)
+        {
+            throw new ArgumentException("Нет пар для выгрузки: проверьте диапазон возрастов и значения пола");
+        }
+
         var totalSaved = 0;
         var totalSkipped = 0;
         var ran = 0;
@@ -89,7 +94,17 @@ public sealed class ExportRun
             configure?.Invoke(command);
 
             // Без этого «Стоп» ждал бы конца запроса.
-            using var registration = token.Register(command.Cancel);
+            using var registration = token.Register(() =>
+            {
+                try
+                {
+                    command.Cancel();
+                }
+                catch (Exception)
+                {
+                    // Драйвер или закрытое соединение могут бросить из Cancel; это не должно всплыть в потоке, отменившем токен.
+                }
+            });
 
             try
             {
@@ -164,11 +179,14 @@ public sealed class ExportRun
                     progress.Report(new ExportProgress(pairAge, pairSex, index + 1, pairs.Count, returned, saved, skipped, totalSaved + saved, totalSkipped + skipped, null));
                 }
             }
-            catch (Exception) when (token.IsCancellationRequested)
+            catch (Exception e) when (token.IsCancellationRequested && e is not OperationCanceledException)
             {
                 // Отмена во время запроса драйвер может показать собственным исключением — наружу уходит отмена.
-                throw new OperationCanceledException(token);
+                throw new OperationCanceledException(e.Message, e, token);
             }
+
+            // Драйвер мог тихо закончить выборку по Cancel(): неполную пару завершённой не помечаем.
+            token.ThrowIfCancellationRequested();
 
             totalSaved += saved;
             totalSkipped += skipped;
@@ -198,7 +216,7 @@ public sealed class ExportRun
 
         if (ran == 0)
         {
-            var last = pairs.Count > 0 ? pairs[^1] : (Age: ageFrom, Sex: string.Empty);
+            var last = pairs[^1];
             progress.Report(new ExportProgress(last.Age, last.Sex, pairs.Count, pairs.Count, 0, 0, 0, 0, 0, "Все пары уже выгружены"));
         }
     }
