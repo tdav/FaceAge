@@ -127,8 +127,10 @@ class FaceDataset(Dataset):
         if rng is not None:
             view = self.distort(view, rng)
 
-        # Билинейное уменьшение в Pillow усредняет пиксели (со сглаживанием).
-        out = view.resize((self.input_size, self.input_size), Image.BILINEAR)
+        # Прямая билинейная выборка БЕЗ сглаживания, как в AgeEstimator.Analyze на телефоне. Pillow resize при уменьшении
+        # усредняет пиксели и размывает лицо, а модель чувствительна к резкости (размытие «омолаживает» на 2–3 года).
+        k = w / self.input_size
+        out = view.transform((self.input_size, self.input_size), Image.AFFINE, (k, 0, 0, 0, k, 0), resample=Image.BILINEAR)
         data = torch.from_numpy(np.asarray(out, dtype=np.float32).copy()).permute(2, 0, 1).contiguous()
         return data, torch.tensor(sample.age, dtype=torch.float32)
 
