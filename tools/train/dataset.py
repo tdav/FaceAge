@@ -69,11 +69,11 @@ def in_target(age: float) -> bool:
 # (генератор засеян crc32 имени файла, вероятность 1).
 TRAIN = dict(rot=12, scale=(0.92, 1.08), shift=0.05, mirror=0.5,
              bright=0.3, contrast=0.3, color=0.2,
-             gamma=(0.3, 0.7, 1.4), blur=(0.3, 0.1, 2.0), low=(0.4, 48, 128), jpeg=(0.3, 30, 90),
+             gamma=(0.3, 0.7, 1.4), blur=(0.3, 0.1, 1.0), low=(0.4, 0.5, 1.0), jpeg=(0.3, 30, 90),
              noise=(0.3, 8.0), bar=0.05)
 PHONE = dict(rot=8, scale=(1.0, 1.0), shift=0.0, mirror=0.0,
              bright=0.25, contrast=0.0, color=0.0,
-             gamma=None, blur=(1.0, 0.0, 1.2), low=(1.0, 64, 128), jpeg=(1.0, 40, 80),
+             gamma=None, blur=(1.0, 0.0, 0.6), low=(1.0, 0.6, 1.0), jpeg=(1.0, 40, 80),
              noise=None, bar=0.0)
 
 
@@ -100,7 +100,7 @@ class FaceDataset(Dataset):
         sample = self.samples[index]
         with Image.open(sample.path) as im:
             img = im.convert("RGB")
-        w = round(self.view)
+        w = self.input_size
         if self.mode == "clean":
             rng = None
             angle, scale, dx, dy, mirror = 0.0, 1.0, 0.0, 0.0, False
@@ -112,25 +112,23 @@ class FaceDataset(Dataset):
             dx, dy = rng.uniform(-c["shift"], c["shift"], 2) * self.view
             mirror = rng.random() < c["mirror"]
 
-        # Аффинное преобразование на кадре, продолженном крайними пикселями: вид w×w с центром в центре кадра.
+        # Один проход: прямая билинейная выборка БЕЗ сглаживания из кадра, продолженного крайними пикселями, сразу в S×S
+        # (S = input_size), как в AgeEstimator.Analyze. Лишний проход или усреднение размывает лицо, а модель чувствительна
+        # к резкости (размытие «омолаживает» на 2–3 года).
         padded = Image.fromarray(np.pad(np.asarray(img), ((PAD, PAD), (PAD, PAD), (0, 0)), mode="edge"))
         s = self.view * scale / w
         cos, sin = math.cos(math.radians(angle)), math.sin(math.radians(angle))
         half = -w / 2  # Pillow сам прибавляет 0,5 к координатам выходного пикселя
         centre = self.size / 2 + PAD
-        view = padded.transform((w, w), Image.AFFINE,
+        out = padded.transform((w, w), Image.AFFINE,
                                 (s * cos, -s * sin, centre + dx + s * (cos - sin) * half,
                                  s * sin, s * cos, centre + dy + s * (sin + cos) * half),
                                 resample=Image.BILINEAR)
         if mirror:
-            view = view.transpose(Image.FLIP_LEFT_RIGHT)
+            out = out.transpose(Image.FLIP_LEFT_RIGHT)
         if rng is not None:
-            view = self.distort(view, rng)
+            out = self.distort(out, rng)
 
-        # Прямая билинейная выборка БЕЗ сглаживания, как в AgeEstimator.Analyze на телефоне. Pillow resize при уменьшении
-        # усредняет пиксели и размывает лицо, а модель чувствительна к резкости (размытие «омолаживает» на 2–3 года).
-        k = w / self.input_size
-        out = view.transform((self.input_size, self.input_size), Image.AFFINE, (k, 0, 0, 0, k, 0), resample=Image.BILINEAR)
         data = torch.from_numpy(np.asarray(out, dtype=np.float32).copy()).permute(2, 0, 1).contiguous()
         return data, torch.tensor(sample.age, dtype=torch.float32)
 
@@ -138,7 +136,7 @@ class FaceDataset(Dataset):
         c = self.cfg
         w = img.width
         if rng.random() < c["low"][0]:
-            small = int(rng.integers(c["low"][1], c["low"][2] + 1))
+            small = max(8, round(rng.uniform(c["low"][1], c["low"][2]) * w))  # доля входа
             img = img.resize((small, small), Image.BILINEAR).resize((w, w), Image.BILINEAR)
         if rng.random() < c["blur"][0]:
             img = img.filter(ImageFilter.GaussianBlur(rng.uniform(c["blur"][1], c["blur"][2])))
