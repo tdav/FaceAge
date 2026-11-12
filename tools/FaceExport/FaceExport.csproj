@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Экспорт лиц из Oracle: автономная сборка Windows Forms, на сервер копируется папка публикации. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <!-- Только 10.0.10: с другой версией автономная сборка из локального кэша не проходит. -->
+    <RuntimeFrameworkVersion>10.0.10</RuntimeFrameworkVersion>
+    <!-- Для старой базы: -p:OracleDriverVersion=3.21.120 -->
+    <OracleDriverVersion Condition="'$(OracleDriverVersion)' == ''">23.26.400</OracleDriverVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="$(OracleDriverVersion)" />
+    <ProjectReference Include="..\FaceExport.Core\FaceExport.Core.csproj" />
+    <None Include="..\..\src\FaceAge\Resources\Raw\yunet_320.onnx" Link="Models\yunet_320.onnx" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="..\..\src\FaceAge\Resources\Raw\genderage.onnx" Link="Models\genderage.onnx" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <!-- onnxruntime.dll зависит от библиотек VC++, которых на чистом сервере может не быть: кладём рядом с программой. -->
+  <Target Name="CopyVcRuntime" AfterTargets="Publish">
+    <ItemGroup>
+      <VcRuntime Include="$(SystemRoot)\System32\msvcp140.dll;$(SystemRoot)\System32\msvcp140_1.dll;$(SystemRoot)\System32\vcruntime140.dll;$(SystemRoot)\System32\vcruntime140_1.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(VcRuntime)" DestinationFolder="$(PublishDir)" />
+  </Target>
+
+</Project>
