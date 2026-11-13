@@ -201,7 +201,7 @@ if (args[0] == "export-db")
     {
         run.Run(
             dbConnection,
-            "SELECT photo, birth_date, shoot_date FROM persons WHERE sex = :sex AND age = :age",
+            "SELECT photo, birth_date, shoot_date, rowid FROM persons WHERE sex = :sex AND age = :age",
             int.Parse(args[3]), int.Parse(args[4]), args[5].Split(';', StringSplitOptions.RemoveEmptyEntries),
             null,
             new SyncProgress<ExportProgress>(p =>

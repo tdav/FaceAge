@@ -36,7 +36,8 @@ public sealed class ExportRun
     }
 
     /// <summary>
-    /// Соединение приходит открытым. Запрос возвращает поля по позиции: 0 — фото, 1 — дата рождения, 2 — дата съёмки;
+    /// Соединение приходит открытым. Запрос возвращает поля по позиции: 0 — фото, 1 — дата рождения, 2 — дата съёмки,
+    /// 3 (необязательное) — ID записи: записи с уже обработанным ID пропускаются без чтения фото;
     /// параметры называются age и sex (без двоеточия — так требует Oracle).
     /// </summary>
     public void Run(
@@ -76,6 +77,7 @@ public sealed class ExportRun
             var returned = 0;
             var saved = 0;
             var skipped = 0;
+            var repeated = 0;
             var reasons = new Dictionary<string, int>();
 
             using var command = connection.CreateCommand();
@@ -119,6 +121,15 @@ public sealed class ExportRun
                 {
                     token.ThrowIfCancellationRequested();
                     returned++;
+
+                    // ID читается раньше фото: уже обработанная запись не расшифровывается.
+                    var id = reader.FieldCount >= 4 && !reader.IsDBNull(3) ? Convert.ToString(reader.GetValue(3), CultureInfo.InvariantCulture) : null;
+                    if (id is not null && this.folder.Seen(id))
+                    {
+                        repeated++;
+                        progress.Report(new ExportProgress(pairAge, pairSex, index + 1, pairs.Count, returned, saved, skipped, totalSaved + saved, totalSkipped + skipped, null));
+                        continue;
+                    }
 
                     string? reason = null;
                     if (reader.IsDBNull(0) || reader.IsDBNull(1) || reader.IsDBNull(2))
@@ -169,7 +180,7 @@ public sealed class ExportRun
                             }
                             else
                             {
-                                this.folder.Add(this.encodeJpeg(crop.Rgb), DateOnly.FromDateTime(birth), DateOnly.FromDateTime(shot), pairSex, crop.Pred);
+                                this.folder.Add(this.encodeJpeg(crop.Rgb), DateOnly.FromDateTime(birth), DateOnly.FromDateTime(shot), pairSex, crop.Pred, id);
                                 saved++;
                             }
                         }
@@ -179,6 +190,10 @@ public sealed class ExportRun
                     {
                         skipped++;
                         reasons[reason] = reasons.GetValueOrDefault(reason) + 1;
+                        if (id is not null)
+                        {
+                            this.folder.Skip(id, reason);
+                        }
                     }
 
                     progress.Report(new ExportProgress(pairAge, pairSex, index + 1, pairs.Count, returned, saved, skipped, totalSaved + saved, totalSkipped + skipped, null));
@@ -208,6 +223,11 @@ public sealed class ExportRun
                 if (skipped > 0)
                 {
                     line += " (" + string.Join(", ", reasons.OrderByDescending(x => x.Value).Select(x => $"{x.Key} {x.Value.ToString("N0", Ru)}")) + ")";
+                }
+
+                if (repeated > 0)
+                {
+                    line += $", уже обработано раньше {repeated.ToString("N0", Ru)}";
                 }
 
                 if (skipped * 10 > returned)

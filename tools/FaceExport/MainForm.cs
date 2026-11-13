@@ -8,7 +8,7 @@ using Oracle.ManagedDataAccess.Client;
 public sealed partial class MainForm : Form
 {
     private const string DefaultSql =
-        "SELECT r.tv_photo, p.tv_datebirth, p.tv_dateenter\r\n" +
+        "SELECT r.tv_photo, p.tv_datebirth, p.tv_dateenter, p.tv_id\r\n" +
         "FROM citizen.tv_person p\r\n" +
         "  JOIN citizen.tv_personphoto ph ON ph.tv_personguid = p.tv_guid AND ph.tv_personid = p.tv_id\r\n" +
         "  JOIN media.tv_photo r ON ph.tv_photoid = r.tv_id\r\n" +
@@ -44,8 +44,6 @@ public sealed partial class MainForm : Form
                 var saved = JsonSerializer.Deserialize<Dictionary<string, string>>(File.ReadAllText(SettingsPath));
                 if (saved is not null)
                 {
-                    this.server.Text = saved.GetValueOrDefault("server", "");
-                    this.user.Text = saved.GetValueOrDefault("user", "");
                     this.sql.Text = saved.GetValueOrDefault("sql", DefaultSql);
                     this.ageFrom.Value = Math.Clamp(int.Parse(saved.GetValueOrDefault("ageFrom", "10"), CultureInfo.InvariantCulture), 0, 120);
                     this.ageTo.Value = Math.Clamp(int.Parse(saved.GetValueOrDefault("ageTo", "55"), CultureInfo.InvariantCulture), 0, 120);
@@ -60,7 +58,7 @@ public sealed partial class MainForm : Form
             this.log.Text = "Настройки не прочитаны: " + e.Message;
         }
 
-        // Строка подключения ConnectionStrings:Oracle из файла рядом с программой заполняет сервер, пользователя и пароль.
+        // Подключение задаётся только строкой ConnectionStrings:Oracle в файле рядом с программой.
         // appsettings.local.json важнее appsettings.json: он не попадает в git, в нём можно держать пароль.
         try
         {
@@ -76,11 +74,13 @@ public sealed partial class MainForm : Form
                     var parsed = new OracleConnectionStringBuilder(text);
                     this.connectionString = text;
                     this.configuredPassword = parsed.Password ?? "";
-                    this.server.Text = parsed.DataSource;
-                    this.user.Text = parsed.UserID;
-                    this.password.Text = this.configuredPassword;
-                    this.log.AppendText("Подключение взято из " + Path.GetFileName(appPath) + Environment.NewLine);
+                    this.log.AppendText($"Подключение из {Path.GetFileName(appPath)}: {parsed.DataSource}, пользователь {parsed.UserID}" + Environment.NewLine);
                 }
+            }
+
+            if (this.connectionString.Length == 0)
+            {
+                this.log.AppendText("Строка подключения не задана: впишите ConnectionStrings:Oracle в appsettings.json рядом с программой" + Environment.NewLine);
             }
         }
         catch (Exception e) when (e is IOException or JsonException or ArgumentException or InvalidOperationException or UnauthorizedAccessException)
@@ -103,6 +103,8 @@ public sealed partial class MainForm : Form
             this.cancel?.Cancel();
             this.log.AppendText("Остановка: ждём конца текущего фото" + Environment.NewLine);
         };
+        // Фокус на «Старт»: иначе при запуске первым выделяется весь текст запроса.
+        this.ActiveControl = this.start;
         this.start.Click += this.OnStart;
         this.FormClosing += this.OnClosing;
     }
@@ -122,9 +124,6 @@ public sealed partial class MainForm : Form
 
     private async void OnStart(object? sender, EventArgs e)
     {
-        var serverText = this.server.Text.Trim();
-        var userText = this.user.Text.Trim();
-        var passwordText = this.password.Text;
         var folderText = this.folder.Text.Trim();
         var sqlText = this.sql.Text;
         var from = (int)this.ageFrom.Value;
@@ -132,17 +131,9 @@ public sealed partial class MainForm : Form
         var sexList = this.sexes.Text.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
         string? problem = null;
-        if (serverText.Length == 0)
+        if (this.connectionString.Length == 0)
         {
-            problem = "Поле «Сервер Oracle» не заполнено";
-        }
-        else if (userText.Length == 0)
-        {
-            problem = "Поле «Пользователь» не заполнено";
-        }
-        else if (passwordText.Length == 0)
-        {
-            problem = "Поле «Пароль» не заполнено";
+            problem = "Строка подключения не задана: впишите ConnectionStrings:Oracle в appsettings.json рядом с программой и запустите её заново";
         }
         else if (folderText.Length == 0)
         {
@@ -180,12 +171,10 @@ public sealed partial class MainForm : Form
 
         try
         {
-            // Пароль в настройки не попадает.
+            // Подключение в эти настройки не попадает: оно только в appsettings.json.
             Directory.CreateDirectory(Path.GetDirectoryName(SettingsPath)!);
             File.WriteAllText(SettingsPath, JsonSerializer.Serialize(new Dictionary<string, string>
             {
-                ["server"] = serverText,
-                ["user"] = userText,
                 ["sql"] = sqlText,
                 ["ageFrom"] = from.ToString(CultureInfo.InvariantCulture),
                 ["ageTo"] = to.ToString(CultureInfo.InvariantCulture),
@@ -198,7 +187,7 @@ public sealed partial class MainForm : Form
             this.log.AppendText("Настройки не сохранены: " + ex.Message + Environment.NewLine);
         }
 
-        Control[] inputs = [this.server, this.user, this.password, this.sql, this.ageFrom, this.ageTo, this.sexes, this.folder, this.browse, this.start];
+        Control[] inputs = [this.sql, this.ageFrom, this.ageTo, this.sexes, this.folder, this.browse, this.start];
         foreach (var control in inputs)
         {
             control.Enabled = false;
@@ -244,20 +233,13 @@ public sealed partial class MainForm : Form
 
         this.work = Task.Run(() =>
         {
-            // Остальные ключи строки из appsettings.json сохраняются; поля окна важнее её значений.
-            var connectionBuilder = new OracleConnectionStringBuilder(this.connectionString) { DataSource = serverText, UserID = userText, Password = passwordText };
-            if (this.connectionString.Length == 0)
-            {
-                connectionBuilder.ConnectionTimeout = 15;
-            }
-
-            using var connection = new OracleConnection(connectionBuilder.ConnectionString);
+            using var connection = new OracleConnection(this.connectionString);
             connection.Open();
             using var cropper = new FaceCropper(File.ReadAllBytes(detectorPath), File.ReadAllBytes(agePath));
             using var exportFolder = new ExportFolder(folderText, "yunet_320.onnx");
             if (exportFolder.Dropped > 0)
             {
-                this.BeginInvoke(() => this.log.AppendText($"Удалено {exportFolder.Dropped} строк незавершённой пары" + Environment.NewLine));
+                this.BeginInvoke(() => this.log.AppendText($"Удалено {exportFolder.Dropped} строк незавершённой пары без ID записи" + Environment.NewLine));
             }
 
             var run = new ExportRun(cropper, exportFolder, GdiCodec.Decode, GdiCodec.EncodeJpeg);
@@ -282,11 +264,9 @@ public sealed partial class MainForm : Form
         catch (Exception ex)
         {
             failed = true;
-            outcome = passwordText.Length == 0 ? ex.Message : ex.Message.Replace(passwordText, "***");
+            outcome = this.configuredPassword.Length == 0 ? ex.Message : ex.Message.Replace(this.configuredPassword, "***");
         }
 
-        // Введённый вручную пароль нужен только на время работы; пароль из appsettings.json возвращается в поле.
-        this.password.Text = this.configuredPassword;
         this.log.AppendText(outcome + Environment.NewLine);
         this.cancel.Dispose();
         this.cancel = null;
