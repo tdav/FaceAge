@@ -24,6 +24,10 @@ public sealed class MainForm : Form
     private static readonly string SettingsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FaceExport", "settings.json");
 
+    // Строка подключения и пароль из appsettings.json; пустые, если файла или строки нет.
+    private readonly string connectionString = "";
+    private readonly string configuredPassword = "";
+
     private readonly TextBox server = new() { Dock = DockStyle.Fill, Name = "server" };
     private readonly TextBox user = new() { Dock = DockStyle.Fill, Name = "user" };
     private readonly TextBox password = new() { Dock = DockStyle.Fill, Name = "password", UseSystemPasswordChar = true };
@@ -136,6 +140,35 @@ public sealed class MainForm : Form
         {
             // Повреждённые настройки не мешают запуску: остаются значения по умолчанию.
             this.log.Text = "Настройки не прочитаны: " + e.Message;
+        }
+
+        // Строка подключения ConnectionStrings:Oracle из файла рядом с программой заполняет сервер, пользователя и пароль.
+        // appsettings.local.json важнее appsettings.json: он не попадает в git, в нём можно держать пароль.
+        try
+        {
+            var localPath = Path.Combine(AppContext.BaseDirectory, "appsettings.local.json");
+            var appPath = File.Exists(localPath) ? localPath : Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+            if (File.Exists(appPath))
+            {
+                using var document = JsonDocument.Parse(File.ReadAllText(appPath));
+                if (document.RootElement.TryGetProperty("ConnectionStrings", out var strings)
+                    && strings.TryGetProperty("Oracle", out var value)
+                    && value.GetString() is { Length: > 0 } text)
+                {
+                    var parsed = new OracleConnectionStringBuilder(text);
+                    this.connectionString = text;
+                    this.configuredPassword = parsed.Password ?? "";
+                    this.server.Text = parsed.DataSource;
+                    this.user.Text = parsed.UserID;
+                    this.password.Text = this.configuredPassword;
+                    this.log.AppendText("Подключение взято из " + Path.GetFileName(appPath) + Environment.NewLine);
+                }
+            }
+        }
+        catch (Exception e) when (e is IOException or JsonException or ArgumentException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            // Текст ошибки не выводится: в нём может оказаться кусок строки подключения с паролем.
+            this.log.AppendText("Строка подключения ConnectionStrings:Oracle в appsettings.json не прочитана (" + e.GetType().Name + "): проверьте формат" + Environment.NewLine);
         }
 
         this.browse.Click += (_, _) =>
@@ -293,8 +326,14 @@ public sealed class MainForm : Form
 
         this.work = Task.Run(() =>
         {
-            using var connection = new OracleConnection(
-                new OracleConnectionStringBuilder { DataSource = serverText, UserID = userText, Password = passwordText, ConnectionTimeout = 15 }.ConnectionString);
+            // Остальные ключи строки из appsettings.json сохраняются; поля окна важнее её значений.
+            var connectionBuilder = new OracleConnectionStringBuilder(this.connectionString) { DataSource = serverText, UserID = userText, Password = passwordText };
+            if (this.connectionString.Length == 0)
+            {
+                connectionBuilder.ConnectionTimeout = 15;
+            }
+
+            using var connection = new OracleConnection(connectionBuilder.ConnectionString);
             connection.Open();
             using var cropper = new FaceCropper(File.ReadAllBytes(detectorPath), File.ReadAllBytes(agePath));
             using var exportFolder = new ExportFolder(folderText, "yunet_320.onnx");
@@ -328,8 +367,8 @@ public sealed class MainForm : Form
             outcome = passwordText.Length == 0 ? ex.Message : ex.Message.Replace(passwordText, "***");
         }
 
-        // Пароль нужен только на время работы: следующий запуск требует ввести его заново.
-        this.password.Clear();
+        // Введённый вручную пароль нужен только на время работы; пароль из appsettings.json возвращается в поле.
+        this.password.Text = this.configuredPassword;
         this.log.AppendText(outcome + Environment.NewLine);
         this.cancel.Dispose();
         this.cancel = null;

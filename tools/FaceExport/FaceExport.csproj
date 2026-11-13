@@ -18,6 +18,7 @@
   <ItemGroup>
     <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="$(OracleDriverVersion)" />
     <ProjectReference Include="..\FaceExport.Core\FaceExport.Core.csproj" />
+    <None Update="appsettings.json;appsettings.local.json" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\FaceAge\Resources\Raw\yunet_320.onnx" Link="Models\yunet_320.onnx" CopyToOutputDirectory="PreserveNewest" />
     <None Include="..\..\src\FaceAge\Resources\Raw\genderage.onnx" Link="Models\genderage.onnx" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
