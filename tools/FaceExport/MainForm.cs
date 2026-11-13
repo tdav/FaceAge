@@ -4,8 +4,8 @@ using System.Text.Json;
 using FaceAge.Export;
 using Oracle.ManagedDataAccess.Client;
 
-/// <summary>Окно выгрузки лиц из Oracle. Строится кодом; макет — раздел 5 описания проекта.</summary>
-public sealed class MainForm : Form
+/// <summary>Окно выгрузки лиц из Oracle. Раскладка — в MainForm.Designer.cs.</summary>
+public sealed partial class MainForm : Form
 {
     private const string DefaultSql =
         "SELECT r.tv_photo, p.tv_datebirth, p.tv_dateenter\r\n" +
@@ -28,95 +28,13 @@ public sealed class MainForm : Form
     private readonly string connectionString = "";
     private readonly string configuredPassword = "";
 
-    private readonly TextBox server = new() { Dock = DockStyle.Fill, Name = "server" };
-    private readonly TextBox user = new() { Dock = DockStyle.Fill, Name = "user" };
-    private readonly TextBox password = new() { Dock = DockStyle.Fill, Name = "password", UseSystemPasswordChar = true };
-    private readonly TextBox sql = new()
-    {
-        Dock = DockStyle.Fill, Name = "sql", Multiline = true, AcceptsReturn = true, ScrollBars = ScrollBars.Both, WordWrap = false,
-        Font = new Font(FontFamily.GenericMonospace, 9.5f), Height = 110,
-    };
-    private readonly NumericUpDown ageFrom = new() { Name = "ageFrom", Minimum = 0, Maximum = 120, Value = 10, Width = 60 };
-    private readonly NumericUpDown ageTo = new() { Name = "ageTo", Minimum = 0, Maximum = 120, Value = 55, Width = 60 };
-    private readonly TextBox sexes = new() { Name = "sexes", Text = "1;2", Width = 90 };
-    private readonly TextBox folder = new() { Dock = DockStyle.Fill, Name = "folder" };
-    private readonly Button browse = new() { Name = "browse", Text = "Обзор", Dock = DockStyle.Fill };
-    private readonly Label current = new() { AutoSize = true, Text = "Ожидание запуска" };
-    private readonly Label pairNumber = new() { AutoSize = true, Anchor = AnchorStyles.Right };
-    private readonly ProgressBar bar = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 1, Height = 22 };
-    private readonly Label counters = new() { AutoSize = true, Text = "Сохранено 0 │ Пропущено 0 │ Скорость 0 фото/с │ Осталось —" };
-    private readonly TextBox log = new() { Dock = DockStyle.Fill, Name = "log", Multiline = true, ReadOnly = true, ScrollBars = ScrollBars.Vertical };
-    private readonly Button stop = new() { Name = "stop", Text = "Стоп", Enabled = false, Width = 90 };
-    private readonly Button start = new() { Name = "start", Text = "Старт", Width = 90 };
-
     private CancellationTokenSource? cancel;
     private Task? work;
     private bool closeAfterWork;
 
     public MainForm()
     {
-        this.Text = "FaceExport — экспорт лиц для обучения";
-        this.ClientSize = new Size(820, 640);
-        this.MinimumSize = new Size(700, 560);
-        this.Font = new Font("Segoe UI", 9f);
-
-        var fields = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 4, Padding = new Padding(10, 10, 10, 4) };
-        fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
-        fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
-        fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
-
-        var ageRow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, WrapContents = false, Margin = new Padding(0) };
-        ageRow.Controls.AddRange([
-            new Label { Text = "от", AutoSize = true, Margin = new Padding(0, 6, 3, 0) }, this.ageFrom,
-            new Label { Text = "до", AutoSize = true, Margin = new Padding(10, 6, 3, 0) }, this.ageTo,
-            new Label { Text = "значения :sex", AutoSize = true, Margin = new Padding(16, 6, 3, 0) }, this.sexes]);
-
-        fields.Controls.Add(new Label { Text = "Сервер Oracle", AutoSize = true, Margin = new Padding(0, 6, 0, 0) }, 0, 0);
-        fields.Controls.Add(this.server, 1, 0);
-        fields.SetColumnSpan(this.server, 3);
-        fields.Controls.Add(new Label { Text = "Пользователь, пароль", AutoSize = true, Margin = new Padding(0, 6, 0, 0) }, 0, 1);
-        fields.Controls.Add(this.user, 1, 1);
-        fields.Controls.Add(this.password, 2, 1);
-        fields.SetColumnSpan(this.password, 2);
-        fields.Controls.Add(new Label { Text = "SQL-запрос", AutoSize = true, Margin = new Padding(0, 6, 0, 0) }, 0, 2);
-        fields.Controls.Add(this.sql, 1, 2);
-        fields.SetColumnSpan(this.sql, 3);
-        fields.Controls.Add(new Label { Text = "Возраст и пол", AutoSize = true, Margin = new Padding(0, 6, 0, 0) }, 0, 3);
-        fields.Controls.Add(ageRow, 1, 3);
-        fields.SetColumnSpan(ageRow, 3);
-        fields.Controls.Add(new Label { Text = "Папка экспорта", AutoSize = true, Margin = new Padding(0, 6, 0, 0) }, 0, 4);
-        fields.Controls.Add(this.folder, 1, 4);
-        fields.SetColumnSpan(this.folder, 2);
-        fields.Controls.Add(this.browse, 3, 4);
-
-        var head = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true, ColumnCount = 2 };
-        head.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        head.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        head.Controls.Add(this.current, 0, 0);
-        head.Controls.Add(this.pairNumber, 1, 0);
-
-        var state = new TableLayoutPanel { Dock = DockStyle.Top, AutoSize = true, ColumnCount = 1, Padding = new Padding(10, 6, 10, 4) };
-        state.Controls.Add(head, 0, 0);
-        state.Controls.Add(this.bar, 0, 1);
-        state.Controls.Add(this.counters, 0, 2);
-
-        var logPanel = new Panel { Dock = DockStyle.Fill, Padding = new Padding(10, 0, 10, 6) };
-        logPanel.Controls.Add(this.log);
-
-        // Справа налево: первым добавленный «Старт» оказывается крайним справа, «Стоп» — левее.
-        var buttons = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Bottom, FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Padding = new Padding(10, 6, 10, 10),
-        };
-        buttons.Controls.Add(this.start);
-        buttons.Controls.Add(this.stop);
-
-        // Dock раскладывается с последнего элемента к первому: заполняющая панель добавляется первой.
-        this.Controls.Add(logPanel);
-        this.Controls.Add(state);
-        this.Controls.Add(fields);
-        this.Controls.Add(buttons);
+        this.InitializeComponent();
 
         this.sql.Text = DefaultSql;
         try
