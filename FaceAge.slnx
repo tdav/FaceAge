@@ -1,4 +1,8 @@
 <Solution>
+  <Folder Name="/tools/">
+    <Project Path="tools/FaceExport.Core/FaceExport.Core.csproj" />
+    <Project Path="tools/FaceExport/FaceExport.csproj" />
+  </Folder>
   <Project Path="src/FaceAge/FaceAge.csproj" />
   <Project Path="tests/FaceAge.Tests/FaceAge.Tests.csproj" />
 </Solution>

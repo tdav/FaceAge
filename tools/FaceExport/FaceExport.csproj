@@ -23,11 +23,9 @@
   </ItemGroup>
 
   <!-- onnxruntime.dll зависит от библиотек VC++, которых на чистом сервере может не быть: кладём рядом с программой. -->
-  <Target Name="CopyVcRuntime" AfterTargets="Publish">
-    <ItemGroup>
-      <VcRuntime Include="$(SystemRoot)\System32\msvcp140.dll;$(SystemRoot)\System32\msvcp140_1.dll;$(SystemRoot)\System32\vcruntime140.dll;$(SystemRoot)\System32\vcruntime140_1.dll" />
-    </ItemGroup>
-    <Copy SourceFiles="@(VcRuntime)" DestinationFolder="$(PublishDir)" />
-  </Target>
+  <!-- Копируются и при сборке, и при публикации, поэтому программа запускается прямо из папки сборки. -->
+  <ItemGroup>
+    <None Include="$(SystemRoot)\System32\msvcp140.dll;$(SystemRoot)\System32\msvcp140_1.dll;$(SystemRoot)\System32\vcruntime140.dll;$(SystemRoot)\System32\vcruntime140_1.dll" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
 
 </Project>

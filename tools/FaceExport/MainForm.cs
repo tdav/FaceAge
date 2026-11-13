@@ -8,15 +8,16 @@ using Oracle.ManagedDataAccess.Client;
 public sealed class MainForm : Form
 {
     private const string DefaultSql =
-        "SELECT photo, birth_date, shoot_date\r\n" +
-        "FROM (\r\n" +
-        "  SELECT p.photo, p.birth_date, p.shoot_date\r\n" +
-        "  FROM persons p\r\n" +
-        "  WHERE p.sex = :sex\r\n" +
-        "    AND FLOOR(MONTHS_BETWEEN(p.shoot_date, p.birth_date) / 12) = :age\r\n" +
-        "  ORDER BY DBMS_RANDOM.VALUE\r\n" +
-        ")\r\n" +
-        "WHERE ROWNUM <= 2000";
+        "SELECT r.tv_photo, p.tv_datebirth, p.tv_dateenter\r\n" +
+        "FROM citizen.tv_person p\r\n" +
+        "  JOIN citizen.tv_personphoto ph ON ph.tv_personguid = p.tv_guid AND ph.tv_personid = p.tv_id\r\n" +
+        "  JOIN media.tv_photo r ON ph.tv_photoid = r.tv_id\r\n" +
+        "WHERE p.tv_recordstatus = 1\r\n" +
+        "  AND p.tv_personstatus = 1\r\n" +
+        "  AND p.tv_sex = TO_NUMBER(:sex)\r\n" +
+        "  AND ph.tv_table = 58\r\n" +
+        "  AND FLOOR(MONTHS_BETWEEN(p.tv_dateenter, p.tv_datebirth) / 12) = :age\r\n" +
+        "  AND ROWNUM <= 2000";
 
     private static readonly CultureInfo Ru = CultureInfo.GetCultureInfo("ru-RU");
 
@@ -33,7 +34,7 @@ public sealed class MainForm : Form
     };
     private readonly NumericUpDown ageFrom = new() { Name = "ageFrom", Minimum = 0, Maximum = 120, Value = 10, Width = 60 };
     private readonly NumericUpDown ageTo = new() { Name = "ageTo", Minimum = 0, Maximum = 120, Value = 55, Width = 60 };
-    private readonly TextBox sexes = new() { Name = "sexes", Text = "M;F", Width = 90 };
+    private readonly TextBox sexes = new() { Name = "sexes", Text = "1;2", Width = 90 };
     private readonly TextBox folder = new() { Dock = DockStyle.Fill, Name = "folder" };
     private readonly Button browse = new() { Name = "browse", Text = "Обзор", Dock = DockStyle.Fill };
     private readonly Label current = new() { AutoSize = true, Text = "Ожидание запуска" };
@@ -126,7 +127,7 @@ public sealed class MainForm : Form
                     this.sql.Text = saved.GetValueOrDefault("sql", DefaultSql);
                     this.ageFrom.Value = Math.Clamp(int.Parse(saved.GetValueOrDefault("ageFrom", "10"), CultureInfo.InvariantCulture), 0, 120);
                     this.ageTo.Value = Math.Clamp(int.Parse(saved.GetValueOrDefault("ageTo", "55"), CultureInfo.InvariantCulture), 0, 120);
-                    this.sexes.Text = saved.GetValueOrDefault("sexes", "M;F");
+                    this.sexes.Text = saved.GetValueOrDefault("sexes", "1;2");
                     this.folder.Text = saved.GetValueOrDefault("folder", "");
                 }
             }
@@ -206,7 +207,7 @@ public sealed class MainForm : Form
         }
         else if (sexList.Length == 0)
         {
-            problem = "Поле «значения :sex» не заполнено: укажите хотя бы одно значение, например M;F";
+            problem = "Поле «значения :sex» не заполнено: укажите хотя бы одно значение, например 1;2";
         }
 
         if (problem is not null)
