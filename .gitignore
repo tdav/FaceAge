@@ -33,3 +33,4 @@ chat-history-*.zip
 # Модели, обученные на фото заказчика: персональные данные, только локально.
 /models/
 src/FaceAge/Resources/Raw/age-*.onnx
+/docs/superpowers/plans
