@@ -23,6 +23,7 @@
 
 		<!-- XAML компилируется генератором исходников: без разбора XAML при запуске и без рефлексии. -->
 		<MauiXamlInflator>SourceGen</MauiXamlInflator>
+		<Features>runtime-async=on</Features>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)' == 'Release'">
@@ -37,6 +38,7 @@
 		<AndroidEnableProfiledAot>true</AndroidEnableProfiledAot>
 		<DebugSymbols>false</DebugSymbols>
 		<DebugType>none</DebugType>
+		
 	</PropertyGroup>
 
 	<!--

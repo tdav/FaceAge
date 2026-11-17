@@ -23,3 +23,13 @@ tests/FaceAge.Tests/Photos/*.jpg
 __pycache__/
 tools/train/runs/
 *.pt
+
+# История чата: только локально.
+chat-history-*.zip
+
+# Архивы с фото: персональные данные, в репозиторий не попадают.
+*.7z
+
+# Модели, обученные на фото заказчика: персональные данные, только локально.
+/models/
+src/FaceAge/Resources/Raw/age-*.onnx

@@ -8,10 +8,22 @@ public partial class MainPage : ContentPage
     // Сколько кадров подряд без лица терпим, прежде чем сбросить значение (~0,6 с).
     private const int LostFaceFrames = 15;
 
-    private readonly FaceOverlay overlay = new();
-    private readonly Task<AgeEstimator> loading;
+    // Модели на выбор. Ошибка — MAE 13–50 лет в режиме phone из report.md обучения (для исходной — «с поправкой»).
+    private static readonly (string Id, string Title, string File, string? SecondaryFile, AgeModel Kind, string Error)[] Models =
+    [
+        ("v2-ensemble", "Ансамбль large + small", "age-v2-large.onnx", "age-v2-small.onnx", AgeModel.Ensemble, "около 1,9 года"),
+        ("v2-large", "Обученная large", "age-v2-large.onnx", null, AgeModel.Large, "около 2,0 лет"),
+        ("v2-small", "Обученная small", "age-v2-small.onnx", null, AgeModel.Small, "около 3,2 года"),
+        ("genderage", "Исходная InsightFace", "genderage.onnx", null, AgeModel.GenderAge, "около 7 лет"),
+    ];
 
-    // Медиана годных кадров за 3 с; первый результат — после 10 годных кадров (меньше секунды при 15+ кадрах/с).
+    // ponytail: загруженные модели не освобождаются — поток камеры может держать прежнюю, а их всего четыре (~25 МБ).
+    private readonly Dictionary<string, Task<AgeEstimator>> estimators = [];
+    private readonly FaceOverlay overlay = new();
+    private Task<byte[]>? detectorBytesTask;
+    private string modelId;
+
+    // Взвешенное окно годных кадров за 3 с; первый результат — после 10 годных кадров (меньше секунды при 15+ кадрах/с).
     private readonly AgeWindow window = new(TimeSpan.FromSeconds(3), 10);
     private FaceCameraView? camera;
     private int missedFrames;
@@ -22,17 +34,99 @@ public partial class MainPage : ContentPage
         this.InitializeComponent();
         this.Overlay.Drawable = this.overlay;
 
-        // Модели грузятся сразу, параллельно с запросом разрешения: создание двух ONNX-сессий занимает ~0,2 с.
-        this.loading = Task.Run(async () =>
+        // Выбранная модель грузится сразу, параллельно с запросом разрешения камеры.
+        var saved = Preferences.Get("model", Models[0].Id);
+        var model = Models.FirstOrDefault(m => m.Id == saved);
+        model = model.Id is null ? Models[0] : model;
+        this.modelId = model.Id;
+        this.ModelLabel.Text = $"{model.Title} · ошибка {model.Error} ›";
+        _ = this.LoadModel(this.modelId);
+    }
+
+    private static async Task<byte[]> LoadAssetBytesAsync(string fileName)
+    {
+        using var stream = await FileSystem.OpenAppPackageFileAsync(fileName);
+        using var memory = new MemoryStream();
+        await stream.CopyToAsync(memory);
+        return memory.ToArray();
+    }
+
+    private Task<byte[]> GetDetectorBytesAsync()
+    {
+        if (this.detectorBytesTask is null || this.detectorBytesTask.IsFaulted)
         {
-            using var detector = await FileSystem.OpenAppPackageFileAsync("yunet_320.onnx");
-            using var ager = await FileSystem.OpenAppPackageFileAsync("genderage.onnx");
-            using var detectorBytes = new MemoryStream();
-            using var agerBytes = new MemoryStream();
-            await detector.CopyToAsync(detectorBytes);
-            await ager.CopyToAsync(agerBytes);
-            return new AgeEstimator(detectorBytes.ToArray(), agerBytes.ToArray());
-        });
+            this.detectorBytesTask = Task.Run(() => LoadAssetBytesAsync("yunet_320.onnx"));
+        }
+
+        return this.detectorBytesTask;
+    }
+
+    /// <summary>Загружает модель один раз; повторный выбор берёт уже созданную сессию.</summary>
+    private Task<AgeEstimator> LoadModel(string id)
+    {
+        if (!this.estimators.TryGetValue(id, out var task) || task.IsFaulted)
+        {
+            var model = Models.First(m => m.Id == id);
+            var detectorTask = this.GetDetectorBytesAsync();
+            task = Task.Run(async () =>
+            {
+                var primaryTask = LoadAssetBytesAsync(model.File);
+                var secondaryBytes = model.SecondaryFile is not null
+                    ? await LoadAssetBytesAsync(model.SecondaryFile)
+                    : null;
+                var detectorBytes = await detectorTask;
+                var primaryBytes = await primaryTask;
+                return new AgeEstimator(detectorBytes, primaryBytes, model.Kind, secondaryBytes)
+                {
+                    SkipAgeOnBadQuality = true,
+                };
+            });
+            this.estimators[id] = task;
+        }
+
+        return task;
+    }
+
+    private async void OnModelTapped(object? sender, TappedEventArgs e)
+    {
+        var titles = Models.Select(m => m.Title).ToArray();
+        var picked = await this.DisplayActionSheetAsync("Модель возраста", "Отмена", null, titles);
+        var model = Models.FirstOrDefault(m => m.Title == picked);
+        if (model.Id is null || model.Id == this.modelId)
+        {
+            return;
+        }
+
+        this.modelId = model.Id;
+        Preferences.Set("model", model.Id);
+        this.ModelLabel.Text = $"{model.Title} · ошибка {model.Error} ›";
+
+        // Оценки прежней модели в медиану новой не смешиваются.
+        this.window.Clear();
+        this.AgeLabel.Text = "—";
+        this.AgeUnitLabel.Text = string.Empty;
+        if (this.camera is null)
+        {
+            return;
+        }
+
+        this.StatusLabel.Text = "Загрузка модели…";
+        try
+        {
+            var estimator = await this.LoadModel(model.Id);
+
+            // Пока грузилась, могли выбрать другую.
+            if (this.modelId == model.Id)
+            {
+                this.camera.Estimator = estimator;
+                this.StatusLabel.Text = "Посмотрите в камеру";
+            }
+        }
+        catch (Exception ex)
+        {
+            Android.Util.Log.Error("FaceAge", ex.ToString());
+            this.StatusLabel.Text = "Не удалось загрузить модель";
+        }
     }
 
     protected override async void OnAppearing()
@@ -74,7 +168,7 @@ public partial class MainPage : ContentPage
 
         try
         {
-            this.camera.Estimator = await this.loading;
+            this.camera.Estimator = await this.LoadModel(this.modelId);
             this.StatusLabel.Text = "Посмотрите в камеру";
             this.ActionButton.IsEnabled = true;
         }
@@ -159,8 +253,11 @@ public partial class MainPage : ContentPage
 
         this.overlay.Stroke = (Color)Application.Current!.Resources["Tint"];
         this.Overlay.Invalidate();
-        this.window.Add(reading.Age, TimeSpan.FromMilliseconds(Environment.TickCount64));
-        if (this.window.Median() is not { } median)
+        var sharpnessFactor = Math.Clamp((reading.Sharpness - 150f) / 250f, 0f, 1f);
+        var yawFactor = Math.Clamp(1f - MathF.Abs(reading.Yaw) / 0.35f, 0f, 1f);
+        var weight = 1f + 0.6f * sharpnessFactor + 0.4f * yawFactor;
+        this.window.Add(reading.Age, TimeSpan.FromMilliseconds(Environment.TickCount64), weight);
+        if (this.window.WeightedEstimate() is not { } median)
         {
             this.StatusLabel.Text = $"Измерение… {this.window.Count * 100 / this.window.MinSamples}%";
             return;
